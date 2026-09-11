@@ -1,13 +1,97 @@
 #!/usr/bin/env Rscript
 
+usage_error <- function(msg) {
+  cat(paste0(msg, "\n"), file = stderr())
+  quit(status = 2, save = "no")
+}
+
+data_error <- function(file, lineno, msg) {
+  cat(sprintf("%s:%d: %s\n", file, lineno, msg), file = stderr())
+  quit(status = 1, save = "no")
+}
+
+read_input_lines <- function(input) {
+  if (input == "-") {
+    con <- file("stdin")
+    lines <- readLines(con)
+    close(con)
+    return(lines)
+  }
+  if (!file.exists(input)) usage_error(paste0("no such file: ", input))
+  readLines(input)
+}
+
+is_skippable <- function(line) {
+  grepl("^\\s*$", line) || grepl("^(#|track|browser)", line)
+}
+
+cmd_sort <- function(argv) {
+  input <- NULL
+  i <- 1
+  while (i <= length(argv)) {
+    if (argv[i] == "-i" && i < length(argv)) {
+      input <- argv[i + 1]
+      i <- i + 2
+    } else {
+      usage_error(paste0("unknown flag: ", argv[i]))
+    }
+  }
+  if (is.null(input)) usage_error("sort: missing required -i <file|->")
+
+  lines <- read_input_lines(input)
+  label <- if (input == "-") "stdin" else input
+
+  keep <- !vapply(lines, is_skippable, logical(1))
+  idx <- which(keep)
+  kept <- lines[idx]
+  fields <- strsplit(kept, "\t", fixed = TRUE)
+
+  n <- length(kept)
+  chrom <- character(n)
+  start <- integer(n)
+  end <- integer(n)
+
+  for (k in seq_len(n)) {
+    f <- fields[[k]]
+    lineno <- idx[k]
+    if (length(f) < 3) {
+      data_error(label, lineno, paste0("malformed line: ", kept[k]))
+    }
+    s <- suppressWarnings(as.integer(f[2]))
+    e <- suppressWarnings(as.integer(f[3]))
+    if (is.na(s) || is.na(e)) {
+      data_error(label, lineno, paste0("malformed line: ", kept[k]))
+    }
+    if (s > e) {
+      data_error(label, lineno, sprintf("start > end (%d > %d)", s, e))
+    }
+    chrom[k] <- f[1]
+    start[k] <- s
+    end[k] <- e
+  }
+
+  ord <- order(chrom, start, end, method = "radix")
+
+  if (n > 0) {
+    cat(paste(kept[ord], collapse = "\n"), "\n", sep = "")
+  }
+}
+
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) >= 1 && args[1] == "--version") {
-  cat("mytools 0.1.0\n")
-  quit(status = 0)
+if (length(args) == 0) {
+  cat("usage: mytools --version | mytools sort -i <file|->\n", file = stderr())
+  quit(status = 2, save = "no")
 }
 
-if (length(args) == 0) {
-  cat("usage: mytools --version\n", file = stderr())
-  quit(status = 2)
+if (args[1] == "--version") {
+  cat("mytools 0.1.0\n")
+  quit(status = 0, save = "no")
 }
+
+if (args[1] == "sort") {
+  cmd_sort(args[-1])
+  quit(status = 0, save = "no")
+}
+
+usage_error(paste0("unknown command: ", args[1]))
