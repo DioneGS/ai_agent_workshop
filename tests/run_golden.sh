@@ -49,6 +49,15 @@ check_stdin() {
 
 check       "sort a.bed"       -- sort -i "$DATA/a.bed"
 check_stdin "sort a.bed stdin" "$DATA/a.bed" -- sort -i -
+check       "sort b.bed"       -- sort -i "$DATA/b.bed"
+check_stdin "sort b.bed stdin" "$DATA/b.bed" -- sort -i -
+
+# a.bed and b.bed carry the fixture edge cases (see tests/README.md):
+# bookended, nested, identical-coordinate, zero-length and position-0
+# intervals. sort has no overlap logic, so what matters here is ordering:
+# lexicographic chrom, then start, then end -- and that ties (identical
+# a09/a10, a03/a04) come out in the same relative order bedtools produces.
+# Both golden cases above already exercise every one of those rows.
 
 # Add the rest here as subcommands land.
 # Suggested next cases:
